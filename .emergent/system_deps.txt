@@ -1,0 +1,6 @@
+mariadb-server=1:10.11.19-0+deb12u1
+php-cli=2:8.2+93
+php-curl=2:8.2+93
+php-gd=2:8.2+93
+php-mbstring=2:8.2+93
+php-mysql=2:8.2+93
