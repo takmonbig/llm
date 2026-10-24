@@ -27,7 +27,7 @@ final class Session
         $now = time();
         if (!isset($_SESSION['_created'])) {
             $_SESSION['_created'] = $now;
-        } elseif ($now - $_SESSION['_created'] > 1800) {
+        } elseif ($now - $_SESSION['_created'] > 1800 && env('APP_ENV') !== 'local') {
             session_regenerate_id(true);
             $_SESSION['_created'] = $now;
         }
@@ -50,6 +50,10 @@ final class Session
 
     public static function regenerate(): void
     {
+        // Preview proxy adds "Partitioned" to cookies; a rotated id ends up as a duplicate cookie and the stale one wins.
+        if (env('APP_ENV') === 'local') {
+            return;
+        }
         session_regenerate_id(true);
     }
 

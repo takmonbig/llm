@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend E2E testing of the PHP 'Long Live Men' preview via public URL (desktop 1920 + mobile 390). Tested all GET routes for status/PHP errors (none), home slider/product/variants/FAQs, all nav + footer policy links, product gallery thumb swaps (15 thumbs incl. 2 videos), add-to-cart/update/remove with header count, buy-now -> checkout server validation -> COD order -> confirmation, register/account/address/profile/order history/logout/login, contact -> admin messages (mark read), track order (logged-in redirect, guest email link via mail.log, track view shows status+tracking), admin login/dashboard stats/orders filter/export CSV/status update/tracking save/product edit save/reviews/settings save/logout, 404 pages. FOUND & FIXED one CRITICAL bug: ALL logins (customer register/login and admin login) failed in a real browser - user was bounced back to /login. After fix everything passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Session / auth (Session::regenerate)", "issue": "FIXED BY TESTER: after register/login (customer & admin) browser was redirected to /login - session lost. Preview proxy rewrites Set-Cookie with 'SameSite=None; Partitioned'; when session_regenerate_id(true) issues a new llm_session cookie, Chromium keeps the old one too (2 llm_session cookies), sends the stale one first, PHP strict mode finds the destroyed session -> new empty session. curl was unaffected, only real browsers.", "selector": "[data-testid=login-submit-btn], [data-testid=admin-login-submit-btn], [data-testid=register-submit-btn]", "priority": "CRITICAL (fixed)"},
+      {"component": "Dates / timezone", "issue": "PHP uses date_default_timezone Asia/Kolkata but MySQL NOW()/CURRENT_TIMESTAMP is UTC (SYSTEM). Order created_at shown as '24 Oct 2026, 08:01 PM' while order number is LLM-261025-..., mail log/export filename show 25 Oct 01:31 IST. Also token expiry comparisons mix PHP date() (IST) with SQL NOW() (UTC), e.g. password_reset/track tokens live 5.5h longer.", "selector": "[data-testid=order-detail-status], admin order header", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Home hero slider", "issues": ["Slides have different aspect ratios so hero height jumps (~745px vs ~640px) between slides, causing layout shift of content below"]},
+      {"screen": "Mobile header", "issues": ["Preview notice + announcement bar take ~130px at 390px width before the header; consider shortening on mobile"]},
+      {"screen": "Admin settings", "issues": ["Auto-generated labels 'Seo title', 'Seo description' should read 'SEO'"]},
+      {"screen": "Admin messages", "issues": ["'Mark read' shows no success flash (works, button disappears)"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Review tester fix in /app/site/app/Core/Session.php: regenerate() and 30-min id rotation are skipped when APP_ENV=local (preview). Keep it for preview; for production keep regeneration (no Partitioned-rewriting proxy there).",
+    "Align DB timezone: run SET time_zone = '+05:30' on PDO connect (or use UTC everywhere) so displayed order/message timestamps and token expiry are consistent",
+    "Optional: fix hero slider fixed aspect-ratio to avoid layout shift",
+    "Optional: sitemap.xml <loc> values are relative ('/shop') because APP_URL is empty - should be absolute URLs"
+  ],
+  "critical_code_review_comments": [
+    "Session::regenerate + use_strict_mode breaks behind a proxy that adds Partitioned to cookies; root cause of auth failure",
+    "Mixed time sources: PHP date() in IST written to DATETIME columns (expires_at) while other columns use SQL NOW() in UTC",
+    "Track form always shows the same generic success flash even for unknown order numbers (good for enumeration safety, intended)"
+  ],
+  "updated_files": ["/app/site/app/Core/Session.php"],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "100% after session fix (0% of auth flows before fix)"},
+  "test_credentials": "Admin admin@preview.local / PreviewAdmin123 worked. Customers created during test: test_user_<ts>@example.com / TestPass123!",
+  "seed_data_creation": "Created 2 COD orders (LLM-261025-9CCFD guest test_buyer@example.com, now Processing with tracking TESTAWB123; LLM-261025-6AEBE for a registered test user), 3 test users (test_user_*, test_dbg_*, test_curl_*), 1 address, 1 contact message (marked read). Product stock decreased to 98. Product subtitle edited and reverted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Site is PHP (php -S :3000) not React. Use browser (not curl) to verify auth since the cookie bug only reproduces in Chromium. Mail links (tracking) are in /app/site/storage/logs/mail.log. Reviews submission and password reset/forgot flows were NOT tested.",
+  "rca of the issue": "Repro: open /admin/login in Chromium via public URL, log in with valid creds -> 302 /admin -> 302 /admin/login. Network: POST sets llm_session=NEW (Partitioned added by proxy) but subsequent requests send 'llm_session=OLD' first; context.cookies() shows two llm_session entries. session_regenerate_id(true) deleted OLD's data and strict mode issues a fresh id each request. Mitigation applied: skip regenerate when APP_ENV=local. Verified: customer register->account, login, logout, admin login all work."
+}
